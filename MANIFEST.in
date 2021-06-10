@@ -1,0 +1,8 @@
+# include
+include LICENSE.txt
+graft docs
+prune docs/_build
+graft tests
+
+# exclude
+global-exclude *.pyc
