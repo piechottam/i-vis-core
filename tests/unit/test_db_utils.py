@@ -1,11 +1,11 @@
+# pylint: disable=redefined-outer-name
+
+from typing import Any, Type
+
 import pytest
 
-from i_vis.core import db
 from i_vis.core import db_utils
-
-
-def test_read_db():
-    pass
+from i_vis.core.db import db
 
 
 @pytest.mark.parametrize(
@@ -15,35 +15,20 @@ def test_read_db():
         ("testTest", "test_test"),
     ],
 )
-def test_fname2tname(fname, expected):
+def test_fname2tname(fname: str, expected: str) -> None:
     assert db_utils.fname2tname(fname) == expected
 
 
-class TestColumnNames:
-    def test_empty(self):
-        class TestMixin:
-            pass
+@pytest.fixture
+def mini_mixin() -> Type[Any]:
+    class Mixin1:
+        pk = db.Column(db.String(30), primary_key=True)
+        name = db.Column(db.String(30))
+        type = db.Column(db.String(30), name="core")
+        n = 10
 
-        assert db_utils.column_names(TestMixin) == []
-
-    def test_mixed(self):
-        class TestMixin:
-            NAME = "VALUE"
-
-            def test_column1(self):
-                return db.Column()
-
-            def test_column2(self):
-                return db.Column()
-
-            def test_other(self):
-                return ["test"]
-
-        assert db_utils.column_names(TestMixin) == [
-            "test_column1",
-            "test_column2",
-        ]
+    return Mixin1
 
 
-def test_row_count():
-    assert False
+def test_column_names(mini_mixin: Type[Any]) -> None:
+    assert db_utils.column_names(mini_mixin) == ("pk", "name", "core")

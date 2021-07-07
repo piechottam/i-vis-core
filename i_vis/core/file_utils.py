@@ -1,17 +1,15 @@
-from datetime import datetime
-from urllib.parse import urlparse
+"""Utils for files.
+"""
+
 import hashlib
 import logging
 import os
 import pathlib
 import re
+from typing import Optional
+from urllib.parse import urlparse
 
 from inflection import underscore
-
-
-def is_local(url: str) -> bool:
-    o = urlparse(url)
-    return o.scheme.lower() == "file"
 
 
 def url2fname(url: str) -> str:
@@ -21,63 +19,152 @@ def url2fname(url: str) -> str:
     return underscore(basename)
 
 
-def prefix_fname(fname: str, pre: str, tag: str = "") -> str:
-    """Prefix fname with pre and and optional tag"""
-    d = os.path.dirname(fname)
-    if d:
-        d = d + "/"
-    f = os.path.basename(fname)
+def prefix_fname(fname: str, pre: str, tag: Optional[str] = None) -> str:
+    """Prefix filename and add optional tag.
+
+    Args:
+        fname: Filename to process.
+        pre: Prefix to add to filename.
+        tag: (Optional). Tag to add to filename. Default = None.
+
+    Returns:
+        Prefixed and optionally tagged filename.
+
+    Examples:
+        >>> prefix_fname("file.txt", "backup")
+        "backup-file.txt"
+
+        >>> prefix_fname("/dir/file.txt", "backup", "old")
+        "/dir/backup-old-file.txt"
+    """
+    dname = os.path.dirname(fname)
+    if dname:
+        dname = dname + "/"
+    fname = os.path.basename(fname)
     if tag:
         pre = f"{pre}-{tag}"
     pre = f"{pre}-"
-    return f"{d}{pre}{f}"
+    return f"{dname}{pre}{fname}"
 
 
-def change_suffix(fname: str, new_suffix: str, old_suffix: str = "") -> str:
+def change_suffix(fname: str, new_suffix: str, old_suffix: Optional[str] = None) -> str:
+    """Change suffix of filename.
+
+    Changes suffix of a filename. If no old suffix is provided, the part that is replaced is guessed.
+
+    Args:
+        fname: Filename to process.
+        new_suffix: Replace old suffix with this.
+        old_suffix: (Optional) Old suffix of filename - must be part of filename. Default = None.
+
+    Returns:
+        Filename with replaced suffix.
+
+    Examples:
+        >>> change_suffix("test.txt.gz", "")
+        "test.txt"
+        >>> change_suffix("test.sorted.txt.gz", ".txt", ".sorted.txt.gz")
+        "test.txt"
+    """
     if not old_suffix:
         old_suffix = os.path.splitext(fname)[1]
     return str(re.sub(old_suffix + "$", new_suffix, fname))
 
 
 def md5(fname: str) -> str:
-    """MD5 hash value for fname"""
-    h = hashlib.md5()
-    with open(fname, "rb") as f:
+    """MD5 hash value for a file.
+
+    Args:
+        fname: File to calculate MD5.
+
+    Returns:
+        MD5 hash for filename.
+    """
+    md5h = hashlib.md5()
+    with open(fname, "rb") as file:
         while True:
-            data = f.read(1024 * 64)
+            data = file.read(1024 * 64)
             if not data:
                 break
-            h.update(data)
-    return h.hexdigest()
+            md5h.update(data)
+    return md5h.hexdigest()
 
 
 def size(fname: str) -> int:
-    """Size of fname in Bytes"""
+    """Size of file in Bytes.
+
+    Args:
+        fname: Filename to determine the size.
+
+    Returns:
+        File size of filename in Bytes.
+    """
     return os.stat(fname).st_size
 
 
 def lines(fname: str) -> int:
+    """Lines of file.
+
+    Args:
+        fname: Filename to determine line count.
+
+    Returns:
+        Line count of filename.
+    """
     return sum(1 for _ in open(fname, "rb"))
 
 
 def clean(s: str) -> str:
+    """
+
+    Args:
+        s:
+
+    Returns:
+
+    """
+    s = re.sub("^ +", "", s)
     s = re.sub("[ /]+", "_", s)
-    s = re.sub("[^0-9a-zA-Z_.]", "", s)
+    s = re.sub("[^0-9a-zA-Z_.]+", "", s)
     return s
 
 
 def create_dir(dname: str) -> None:
+    """Create directory.
+
+    If directory does not exist, create it and write a log message.
+
+    Args:
+        dname: Directory to create.
+    """
     if not os.path.exists(dname):
         pathlib.Path(dname).mkdir(parents=True)
         logging.debug("Created directory: %s", dname)
 
 
 def read_query(fname: str) -> str:
-    with open(fname, "r") as f:
-        s = f.read()
+    """Read a query from file.
+
+    Read query and remove all white space between tags.
+
+    Args:
+        fname: Filename tor read.
+
+    Returns:
+        Read query.
+    """
+    with open(fname, "r") as file:
+        s = file.read()
         return re.sub(r"\s+(?=<)", "", s)
 
 
-def modified(fname: str) -> datetime:
-    mtime = os.stat(fname).st_mtime
-    return datetime.fromtimestamp(mtime)
+def modified(fname: str) -> float:
+    """Get modified time.
+
+    Args:
+        fname: Filename to get modified time for.
+
+    Returns:
+        Modified time of filename.
+    """
+    return os.stat(fname).st_mtime

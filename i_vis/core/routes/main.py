@@ -1,12 +1,17 @@
+"""
+Main routes.
+
+"""
+
 from flask import abort, Blueprint, flash, render_template, redirect, request, url_for
 from flask_login import current_user, login_user, logout_user
 from flask_login.utils import login_required
 
-from .. import db
+from ..db import db
 from ..forms import SignInForm, ChangeUserForm
 from ..models import User, Setting
-from ..utils import is_safe_url, admin_required
-
+from ..utils import is_safe_url
+from ..login import admin_required
 
 bp = Blueprint("main", __name__)
 
@@ -26,12 +31,12 @@ def signin():
     if form.validate_on_submit():
         user = User.query.filter_by(name=form.name.data).first()
         if user is None or not user.check_password(form.password.data):
-            flash("Invalid username or passwort.", category="error")
+            flash("Invalid username or password.", category="error")
             return redirect(url_for("main.signin"))
         login_user(user, remember=form.rememberme.data)
 
         next_ = request.args.get("next")
-        if not is_safe_url(next_):
+        if not next_ or not is_safe_url(next_):
             return abort(400)
 
         return redirect(next_ or url_for("main.index"))
@@ -53,7 +58,7 @@ def forgot_password():
     #         return redirect(url_for("main.index"))
     #     form = ForgotPasswordForm()
     #     if form.validate_on_submit():
-    #         user = User.query.filter_by(email=form.email.data).first()
+    #         user = User.query.filter_by(mail=form.mail.data).first()
     #         if user is None:
     #             flash("Unknown E-Mail.", category="error")
     #             return redirect(url_for("main.password_recovery"))
@@ -61,7 +66,7 @@ def forgot_password():
     #         # write E-MAIL TODO send e-mail
     #         # link with
     #         flash(
-    #             f"Instruction to recover password have been sent to: {form.email.data}",
+    #             f"Instruction to recover password have been sent to: {form.mail.data}",
     #             category="info",
     #         )
     #         return redirect(url_for("main.signin"))
@@ -73,14 +78,14 @@ def forgot_password():
 #    token = request.args.get("token")
 #    user = User.query.filter_by(token=token).first()
 #    if user is None:
-#        flash("Unknown token - password recovery failet.", category="error")
+#        flash("Unknown token - password recovery failed.", category="error")
 #        return redirect(url_for("main.forgot_password"))
 #    form = PasswordRecoveryForm()
 #    if form.validate_on_submit():
-#        user.set_password(form.passwort.data)
+#        user.set_password(form.password.data)
 #        db.session.add(user)
 #        db.session.commit()
-#        flash("Password changet. Try to Sign in.", category="success")
+#        flash("Password changed. Try to Sign in.", category="success")
 #        return redirect(url_for("main.signin"))
 #    return render_template("password-recovery.jinja", form=form, token=token)
 
@@ -94,7 +99,7 @@ def account():
             current_user.set_password(form.password.data)
             db.session.add(current_user)
             db.session.commit()
-            flash("Password changet.", category="success")
+            flash("Password changed.", category="success")
             return render_template("account.jinja", form=form)
 
         flash("Current password incorrect.", category="error")

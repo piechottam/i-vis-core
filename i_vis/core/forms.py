@@ -14,12 +14,14 @@ from wtforms.validators import DataRequired, Email, EqualTo, Length
 
 
 class UserForm(FlaskForm):
+    """Form for essential user account info"""
+
     name = StringField("Username", validators=[DataRequired()])
-    email = StringField(
+    mail = StringField(
         "E-Mail",
         validators=[
             DataRequired(),
-            Email(message="Enter a valid email."),
+            Email(message="Enter a valid mail."),
         ],
     )
     password = PasswordField(
@@ -37,10 +39,14 @@ class UserForm(FlaskForm):
 
 
 class ChangeUserForm(UserForm):
+    """Form based on :class:`UserForm` with additional validation."""
+
     current = PasswordField("Current Password", validators=[DataRequired()])
 
 
 class SignInForm(FlaskForm):
+    """Signin form."""
+
     name = StringField("Username", validators=[DataRequired()])
     password = PasswordField("Password", validators=[DataRequired()])
     rememberme = BooleanField("Remember Me")
@@ -48,7 +54,9 @@ class SignInForm(FlaskForm):
 
 
 class ForgotPasswordForm(FlaskForm):
-    email = StringField(
+    """Forgot my password form."""
+
+    mail = StringField(
         "E-Mail",
         validators=[
             DataRequired(),
@@ -59,11 +67,13 @@ class ForgotPasswordForm(FlaskForm):
 
 
 class PasswordRecoveryForm(FlaskForm):
+    """Password recovery form."""
+
     password = PasswordField(
         "Password",
         validators=[
             DataRequired(),
-            Length(min=6, message="Select a stronger passwort."),
+            Length(min=6, message="Select a stronger password."),
         ],
     )
     confirm = PasswordField(
@@ -77,19 +87,21 @@ class PasswordRecoveryForm(FlaskForm):
 
 
 class RegisterForm(FlaskForm):
+    """Register a new account form."""
+
     name = StringField("Username", validators=[DataRequired()])
-    email = StringField(
+    mail = StringField(
         "E-Mail",
         validators=[
             DataRequired(),
-            Email(message="Enter a valid email."),
+            Email(message="Enter a valid mail."),
         ],
     )
     password = PasswordField(
         "Password",
         validators=[
             DataRequired(),
-            Length(min=6, message="Select a stronger passwort."),
+            Length(min=6, message="Select a stronger password."),
         ],
     )
     confirm = PasswordField(

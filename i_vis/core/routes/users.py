@@ -1,21 +1,25 @@
-from flask import Blueprint, render_template, redirect, url_for, flash
+"""
+User specific routes.
+"""
+
+from flask import Blueprint, render_template, redirect, url_for, flash, Response
 from flask_login import current_user
 from flask_login.utils import login_required
 
-from .. import db
+from ..db import db
 from ..errors import flash_duplicate, flash_not_found
 from ..forms import ChangeUserForm, UserForm
 from ..models import User
-from ..utils import admin_required
-
+from ..login import admin_required
 
 bp = Blueprint("users", __name__, url_prefix="/users")
 
 
+# TODO
 _index_col_descs = {
     "id": "User ID",
     "name": "Username",
-    "email": "E-Mail",
+    "mail": "E-Mail",
     "created_at": "Created",
     "is_admin": "Admin",
 }
@@ -25,7 +29,7 @@ _index_col_descs = {
 @bp.route("/", methods=["GET", "POST"])
 @admin_required
 @login_required
-def index():
+def index() -> str:
     return render_template(
         "users/index.jinja",
         column_descs=_index_col_descs,
@@ -36,22 +40,22 @@ def index():
 @bp.route("/add", methods=["GET", "POST"])
 @admin_required
 @login_required
-def add():
+def add() -> Response:
     form = UserForm()
     if form.validate_on_submit():
         user = User.load_by_name(form.name.data)
         if user is not None:
             flash_duplicate("Username", extra=" Pick something else.")
             return redirect(url_for("users.add"))
-        user = User.load_by_email(form.email.data)
+        user = User.load_by_mail(form.mail.data)
         if user is not None:
             flash_duplicate("E-Mail", extra=" Pick something else.")
             return redirect(url_for("users.add"))
-        user = User(name=form.name.data, email=form.email.data)
+        user = User(name=form.name.data, mail=form.mail.data)
         user.set_password(form.password.data)
         db.session.add(user)
         db.session.commit()
-        flash(f"User {user.name} has been createt.", category="success")
+        flash(f"User {user.name} has been created.", category="success")
         return redirect(url_for("users.show", user_id=user.name))
     return render_template("users/adt.jinja", title="Add User", form=form)
 
@@ -83,14 +87,14 @@ def edit(user_id: int):
         if tmp_user is not None and tmp_user.name != user.name:
             flash_duplicate("User", user_id)
             return redirect(url_for("users.edit"))
-        tmp_user = User.load_by_email(form.email.data)
+        tmp_user = User.load_by_mail(form.mail.data)
         if tmp_user is not None and tmp_user.name != user.name:
-            flash_duplicate("E-Mail", form.email.data)
+            flash_duplicate("E-Mail", form.mail.data)
             return redirect(url_for("users.edit"))
-        user = User(name=form.name.data, email=form.email.data)
+        user = User(name=form.name.data, mail=form.mail.data)
         user.set_password(form.password.data)
         db.session.add(user)
         db.session.commit()
-        flash(f"User {user.name} has been updatet.", category="success")
+        flash(f"User {user.name} has been updated.", category="success")
         return redirect(url_for("users.show", user_id=user.name))
     return render_template("users/edit.jinja", title="Edit User", form=form)

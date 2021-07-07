@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
-from typing import Any, Mapping
 import os
+from typing import Any, Dict
 
 from setuptools import setup, find_namespace_packages
 
@@ -14,7 +14,7 @@ with open(os.path.join(here, "test-requirements.txt"), "r") as f:
     test_require = f.read().splitlines()
 
 
-version: Mapping[str, Any] = {}
+version: Dict[str, Any] = {}
 with open(os.path.join(here, "i_vis", "core", "__version__.py"), "r") as f:
     # pylint: disable=exec-used
     exec(f.read(), version)

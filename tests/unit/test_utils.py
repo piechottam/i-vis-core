@@ -1,43 +1,58 @@
+# pylint: disable=redefined-outer-name
+from enum import Enum
+from typing import Type
+
 import pytest
 
 from i_vis.core import utils
 
 
-@pytest.mark.parametrize("targets,expected", [("test", True)])
-def test_is_safe_url(targets, expected):
-    assert utils.is_safe_url(targets) == expected
-
-
-class TestEnumMixin:
-    pass
-
-
-class TestEnumUtils:
-    pass
-
-
-def test_datetime_format():
-    pass
-
-
-def test_datatable_columns():
-    pass
-
-
-def test_datatable_render_link():
+def test_is_safe_url() -> None:
     assert False
 
 
-def test_render_link():
+class _EnumInstance(utils.EnumMixin, Enum):
+    VAR1 = "VAL1"
+    VAR2 = "VAL2"
+
+
+@pytest.fixture
+def enum_instance() -> Type[_EnumInstance]:
+    return _EnumInstance
+
+
+class TestEnumMixin:
+    def test_from_str(self, enum_instance: Type[_EnumInstance]) -> None:
+        assert enum_instance.from_str("VAL1") == enum_instance.VAR1
+        assert enum_instance.from_str("VAL2") == enum_instance.VAR2
+
+    def test_values(self, enum_instance: Type[_EnumInstance]) -> None:
+        assert enum_instance.values() == {"VAL1", "VAL2"}
+
+
+def test_datatable_columns() -> None:
+    # TODO-report
+    assert False
+
+
+def test_datatable_render_link() -> None:
+    # TODO-report
+    assert False
+
+
+def test_render_link() -> None:
+    # TODO-report
     assert (
         utils.render_link("url_value", "label_value")
         == '<a href="url_value">label_value</a>'
     )
 
 
-def test_register_datatable_query():
+def test_register_datatable_query() -> None:
+    # TODO-report
     assert False
 
 
-def test_register_autocomplete():
+def test_register_autocomplete() -> None:
+    # TODO-report
     assert False

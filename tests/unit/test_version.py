@@ -1,30 +1,21 @@
 # pylint: disable=redefined-outer-name
 
+from typing import Sequence
 import datetime
 
 import pytest
+from _pytest.fixtures import SubRequest
 
 from i_vis.core import version
 
 
-@pytest.mark.parametrize(
-    "date,expected",
-    [
-        (datetime.date(year=2002, month=1, day=1), "2002_01_01"),
-        (datetime.date(year=2002, month=1, day=30), "2002_01_30"),
-    ],
-)
-def test_format_data(date: datetime.date, expected: str):
-    assert version.format_date(date) == expected
-
-
 @pytest.fixture
-def unknown_version():
+def unknown_version() -> version.Unknown:
     return version.Unknown()
 
 
 class TestUnknown:
-    def test_str(self, unknown_version):
+    def test_str(self, unknown_version: version.Unknown) -> None:
         assert str(unknown_version) == "Unknown"
 
     @pytest.mark.parametrize(
@@ -35,28 +26,34 @@ class TestUnknown:
             (version.Version(), version.Unknown(), False),
         ],
     )
-    def test_eq(self, version1, version2, expected):
+    def test_eq(
+        self, version1: version.Version, version2: version.Version, expected: bool
+    ) -> None:
         assert (version1 == version2) == expected
 
     @pytest.mark.parametrize(
         "unknown_version1,unknown_version2", [(version.Unknown(), version.Unknown())]
     )
-    def test_lt(self, unknown_version1, unknown_version2):
+    def test_lt(
+        self, unknown_version1: version.Unknown, unknown_version2: version.Unknown
+    ) -> None:
         assert not unknown_version1 < unknown_version2
 
     @pytest.mark.parametrize(
         "unknown_version1,unknown_version2", [(version.Unknown(), version.Unknown())]
     )
-    def test_gt(self, unknown_version1, unknown_version2):
+    def test_gt(
+        self, unknown_version1: version.Unknown, unknown_version2: version.Unknown
+    ) -> None:
         assert not unknown_version1 > unknown_version2
 
 
-def create_date_version(s: str):
+def create_date_version(s: str) -> version.Date:
     return version.Date(datetime.date.fromisoformat(s))
 
 
 @pytest.fixture
-def date_version(request):
+def date_version(request: SubRequest) -> version.Date:
     # e.g.: "2020-6-2"
     return create_date_version(request.param)
 
@@ -70,7 +67,7 @@ class TestDate:
         ],
         indirect=["date_version"],
     )
-    def test_year(self, date_version: version.Date, expected: int):
+    def test_year(self, date_version: version.Date, expected: int) -> None:
         assert date_version.year == expected
 
     @pytest.mark.parametrize(
@@ -81,7 +78,7 @@ class TestDate:
         ],
         indirect=["date_version"],
     )
-    def test_month(self, date_version: version.Date, expected: int):
+    def test_month(self, date_version: version.Date, expected: int) -> None:
         assert date_version.month == expected
 
     @pytest.mark.parametrize(
@@ -92,7 +89,7 @@ class TestDate:
         ],
         indirect=["date_version"],
     )
-    def test_day(self, date_version: version.Date, expected: int):
+    def test_day(self, date_version: version.Date, expected: int) -> None:
         assert date_version.day == expected
 
     @pytest.mark.parametrize(
@@ -103,7 +100,7 @@ class TestDate:
         ],
         indirect=["date_version"],
     )
-    def test_str(self, date_version: version.Date, expected: str):
+    def test_str(self, date_version: version.Date, expected: str) -> None:
         assert str(date_version), expected
 
     @pytest.mark.parametrize(
@@ -131,7 +128,9 @@ class TestDate:
             ),
         ],
     )
-    def test_eq(self, date_version1, date_version2, expected: bool):
+    def test_eq(
+        self, date_version1: version.Date, date_version2: version.Date, expected: bool
+    ) -> None:
         assert (date_version1 == date_version2) == expected
 
     @pytest.mark.parametrize(
@@ -176,7 +175,7 @@ class TestDate:
     )
     def test_lt(
         self, date_version1: version.Date, date_version2: version.Date, expected: bool
-    ):
+    ) -> None:
         assert (date_version1 < date_version2) == expected
 
     @pytest.mark.parametrize(
@@ -187,11 +186,8 @@ class TestDate:
         ],
         indirect=["date_version"],
     )
-    def test_date(self, date_version: version.Date, expected: datetime.date):
-        assert date_version.date() == expected
-
-    def test_fromurl(self):
-        assert False
+    def test_to_date(self, date_version: version.Date, expected: datetime.date) -> None:
+        assert date_version.to_date() == expected
 
     @pytest.mark.parametrize(
         "s, expected",
@@ -200,16 +196,12 @@ class TestDate:
             ("2021_06_02", create_date_version("2021-06-02")),
         ],
     )
-    def test_from_db(self, s: str, expected: version.Date):
-        assert version.Date.from_db(s) == expected
-
-
-class TestNightly:
-    pass
+    def test_from_str(self, s: str, expected: version.Date) -> None:
+        assert version.Date.from_str(s) == expected
 
 
 @pytest.fixture
-def default_version(request):
+def default_version(request: SubRequest) -> version.Default:
     return version.Default(**request.param)
 
 
@@ -227,7 +219,7 @@ class TestDefault:
             ),
         ],
     )
-    def test_str(self, default_version: version.Date, expected: str):
+    def test_str(self, default_version: version.Date, expected: str) -> None:
         assert str(default_version) == expected
 
     @pytest.mark.parametrize(
@@ -248,6 +240,26 @@ class TestDefault:
                 ),
                 True,
             ),
+            (
+                version.Default(major=1, minor=2, patch=3),
+                version.Default(major=1, minor=1, patch=3),
+                False,
+            ),
+            (
+                version.Default(major=1, minor=2, patch=3),
+                version.Default(major=1, minor=2, patch=2),
+                False,
+            ),
+            (
+                version.Default(major=1, minor=2, patch=3),
+                version.Default(major=2, minor=2, patch=3),
+                False,
+            ),
+            (
+                version.Default(major=1, minor=2, patch=3, suffix="-stagging"),
+                version.Default(major=1, minor=2, patch=3),
+                False,
+            ),
         ],
     )
     def test_eq(
@@ -255,21 +267,70 @@ class TestDefault:
         default_version1: version.Date,
         default_version2: version.Date,
         expected: bool,
-    ):
+    ) -> None:
         assert (default_version1 == default_version2) == expected
 
-    def test_lt(self):
-        assert False
+    @pytest.mark.parametrize(
+        "default_version1,default_version2, expected",
+        [
+            (
+                version.Default(major=1, prefix="testing", suffix="alpha"),
+                version.Default(major=1),
+                False,
+            ),
+            (
+                version.Default(major=1, minor=0),
+                version.Default(major=1, minor=0),
+                False,
+            ),
+            (
+                version.Default(major=1, minor=0, patch=1),
+                version.Default(major=1, minor=0, patch=1),
+                False,
+            ),
+            (
+                version.Default(major=1, minor=0, patch=1),
+                version.Default(major=1, minor=1, patch=1),
+                True,
+            ),
+            (
+                version.Default(major=1, minor=1, patch=1),
+                version.Default(major=1, minor=1, patch=2),
+                True,
+            ),
+            (
+                version.Default(major=1, minor=1),
+                version.Default(major=1, minor=1, patch=1),
+                True,
+            ),
+        ],
+    )
+    def test_lt(
+        self,
+        default_version1: version.Default,
+        default_version2: version.Default,
+        expected: bool,
+    ) -> None:
+        assert (default_version1 < default_version2) == expected
 
-    def from_db(self):
-        assert False
+    @pytest.mark.parametrize(
+        "s,expected",
+        [
+            ("pre-1.1.2-post", version.Default(1, 1, 2, prefix="pre-", suffix="-post")),
+            ("1.1.2", version.Default(1, 1, 2)),
+            ("1.1", version.Default(1, 1)),
+            ("1", version.Default(1)),
+        ],
+    )
+    def test_from_str(self, s: str, expected: version.Default) -> None:
+        assert version.Default.from_str(s) == expected
 
 
-def test_xpath():
+def test_by_xpath() -> None:
     assert False
 
 
-def test_last_modified():
+def test_last_modified() -> None:
     assert False
 
 
@@ -291,5 +352,5 @@ def test_last_modified():
         ),
     ],
 )
-def test_recent(dates, expected):
-    assert version.recent(dates) == expected
+def test_recent(dates: Sequence[datetime.date], expected: datetime.date) -> None:
+    assert version.recent(*dates) == expected

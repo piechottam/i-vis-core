@@ -1,52 +1,104 @@
 # pylint: disable=redefined-outer-name
 # pylint: disable=protected-access
 
+from typing import Any, Optional
+
 import pytest
 
 from i_vis.core import config
-from i_vis.core.config import add_secret_key
 
 
-@pytest.fixture
-def empty_config():
-    config._NAME2VAR.clear()
-    config._PNAME2VAR.clear()
+class TestConfigMeta:
+    @pytest.mark.parametrize(
+        "name,vtype,pname",
+        [
+            ("name1", "foo", "pname1"),
+            ("name1", "core", "pname1"),
+            ("name1", "pname", None),
+        ],
+    )
+    def test_register_variable_fails(
+        self,
+        config_meta: config.ConfigMeta,
+        name: str,
+        vtype: str,
+        pname: Optional[str],
+    ) -> None:
+        with pytest.raises(ValueError):
+            config_meta.register_variable(name=name, vtype=vtype, pname=pname)
 
+    @pytest.mark.parametrize(
+        "name,required,default",
+        [
+            ("name1", False, "def1"),
+            ("name2", True, None),
+        ],
+    )
+    def test_register_core_variable(
+        self,
+        config_meta: config.ConfigMeta,
+        name: str,
+        required: bool,
+        default: Optional[Any],
+    ) -> None:
+        var_name = config_meta.register_core_variable(
+            name=name, required=required, default=default
+        )
+        assert (
+            config_meta._name2var[var_name]
+            == {
+                "pname": None,
+                "required": required,
+                "default": default,
+                "type": "core",
+            }
+            and not config_meta._pname2vars
+        )
 
-@pytest.fixture
-# pylint: disable=unused-argument
-def dummy_config(empty_config):
-    config.register_core_variable("core_var1", required=True)
-    config.register_plugin_variable("pname1", "var1", required=True)
+    @pytest.mark.parametrize(
+        "name,required,pname,default",
+        [
+            ("name1", False, "pname1", "def1"),
+            ("name2", True, "pname2", None),
+        ],
+    )
+    def test_register_plugin_variable(
+        self,
+        config_meta: config.ConfigMeta,
+        name: str,
+        required: bool,
+        pname: str,
+        default: Optional[Any],
+    ) -> None:
+        var_name = config_meta.register_plugin_variable(
+            name=name, required=required, pname=pname, default=default
+        )
+        assert (
+            config_meta._name2var[var_name]
+            == {
+                "required": required,
+                "default": default,
+                "pname": pname,
+                "type": "plugin",
+            }
+            and config_meta._pname2vars
+        )
 
+    def test_core_vars(self, default_config_meta: config.ConfigMeta) -> None:
+        assert default_config_meta.core_vars == (
+            "I_VIS_CORE1",
+            "I_VIS_CORE2",
+            "I_VIS_CORE3",
+            "I_VIS_CORE4",
+        )
 
-@pytest.mark.usefixtures("empty_config")
-class TestGetRegisteredVariables:
-    def test_empty(self):
-        assert not config.get_name2variable()
-
-    def test_not_empty(self):
-        config.register_core_variable("core_var1", required=True)
-        config.register_plugin_variable("pname1", "var1", required=True)
-        assert config.get_name2variable()
-
-
-@pytest.mark.usefixtures("dummy_config")
-class TestGetValue:
-    def test_get_value(self):
-        assert not config.get_name2variable()["CORE_VAR1"]
-        assert not config.get_name2variable()["PNAME1_VAR1"]
-
-    def test_get_value_raises(self):
-        with pytest.raises(config.MissingVariable):
-            _ = dummy_config.get_value("TEST")
-
-
-def test_register_variable():
-    pass
-    # tested via wrapper:
-    # * test_register_core_variable
-    # * test_register_plugin_variable
+    def test_plugins_vars(self, default_config_meta: config.ConfigMeta) -> None:
+        assert default_config_meta.plugin_vars == (
+            "I_VIS_PNAME1_VAR1",
+            "I_VIS_PNAME1_VAR2",
+            "I_VIS_PNAME2_VAR3",
+            "I_VIS_PNAME2_VAR4",
+        )
 
 
 @pytest.mark.parametrize(
@@ -56,48 +108,5 @@ def test_register_variable():
         ("", "name2", "I_VIS_NAME2"),
     ],
 )
-def test_variable_name(pname: str, name: str, expected: str):
+def test_variable_name(pname: str, name: str, expected: str) -> None:
     assert config.variable_name(pname=pname, name=name) == expected
-
-
-def test_register_core_variable():
-    config.register_core_variable(name="CORE")
-    core_var = "I_VIS_CORE"
-    assert core_var in config.get_name2variable()
-    assert config.get_name2variable()[core_var]["type"] == "core"
-    assert "default" not in config.get_name2variable()[core_var]
-
-
-def test_register_plugin_variable():
-    config.register_plugin_variable(pname="pname1", name="var1")
-    plugin_var = "I_VIS_PNAME1_VAR1"
-    assert plugin_var in config.get_name2variable()
-    assert config.get_name2variable()[plugin_var]["type"] == "plugin"
-    assert "default" not in config.get_name2variable()[plugin_var]
-
-
-class TestSetDefaults:
-    pass
-
-
-class TestCheckConfig:
-    def test_nothing_required(self):
-        assert False
-
-    def test_core_var_required(self):
-        assert False
-
-    def test_plugin_var_required(self):
-        assert False
-
-    def test_specific_pnames(self):
-        assert False
-
-
-def test_add_secret_key():
-    test_config = {}
-    add_secret_key(test_config, "cookie_name")
-    assert test_config["SECRET_KEY"] and len(test_config["SECRET_KEY"]) == 24
-    assert test_config["SESSION_COOKIE_SECURE"]
-    assert test_config["SESSION_COOKIE_NAME"] == "cookie_name"
-    assert not test_config["WTF_CSRF_TIME_LIMIT"]

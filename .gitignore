@@ -98,3 +98,5 @@ ENV/
 .ropeproject
 *.npy
 *.pkl
+/tests/.pylintrc
+/TODO.md

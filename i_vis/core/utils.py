@@ -1,56 +1,96 @@
-from enum import Enum
-from functools import wraps
-from typing import Callable, Mapping, MutableMapping, Optional, Sequence, Set
-from urllib.parse import urlparse, urljoin
-import logging
+"""
+General utility classes and methods.
+"""
 
-from flask import redirect, request, url_for
-from flask_login import current_user
+import logging
+from datetime import datetime
+from typing import (
+    Any,
+    Callable,
+    Mapping,
+    MutableMapping,
+    Optional,
+    Sequence,
+    Set,
+    TYPE_CHECKING,
+)
+from urllib.parse import urlparse, urljoin
+
+from flask import request
 from tqdm import tqdm
 
-from . import login
-from .errors import flash_permission_denied
+
+if TYPE_CHECKING:
+    from logging import LogRecord
+    from .db import db
 
 
-def is_safe_url(targets):
+def is_safe_url(target: str) -> bool:
+    """Check if target url is safe.
+
+    Check target url to prevent cross-site scripting attacks.
+
+    Args:
+        target: An url check if it is safe.
+
+    Returns:
+        True if target is safe or False otherwise.
+    """
     ref_url = urlparse(request.host_url)
-    test_url = urlparse(urljoin(request.host_url, targets))
+    test_url = urlparse(urljoin(request.host_url, target))
     return test_url.scheme in ("http", "https") and ref_url.netloc == test_url.netloc
 
 
 class EnumMixin:
-    @classmethod
-    def from_str(cls, s: str):
-        return EnumUtils.from_str(cls, s)
+    """Mixin provides convenience methods."""
 
     @classmethod
-    def values(cls) -> Set["str"]:
-        return EnumUtils.values(cls)
-
-
-class EnumUtils:
-    @staticmethod
-    def from_str(enum: Enum, s: str):
-        for e in enum:
-            if e.value == s:
-                return e
+    def from_str(cls, s: str) -> Any:
+        for v in cls:
+            if v.value == s:
+                return v
         raise NotImplementedError
 
-    @staticmethod
-    def values(enum: Enum) -> Set["str"]:
-        # pylint: disable=E1133
-        return {e.value for e in enum}
+    @classmethod
+    def values(cls) -> Set[str]:
+        return {e.value for e in cls}
 
 
-def datetime_format(value, format_: str) -> str:
+def format_datetime(value: datetime.date, format_: str) -> str:
+    """TODO-report - a template filter for jinja2
+
+    Args:
+        value:
+        format_:
+
+    Returns:
+
+    """
     return value.strftime(format_)
 
 
 def datatable_columns(column_descs: Mapping) -> Sequence[Mapping]:
+    """TODO-report somehow needed for datatable
+
+    Args:
+        column_descs:
+
+    Returns:
+
+    """
     return tuple(col_desc["dt"] for col_desc in column_descs)
 
 
 def datatable_render_link(url: str, label: str = "'+data+'") -> str:
+    """TODO-report what is this used for?
+
+    Args:
+        url:
+        label:
+
+    Returns:
+
+    """
     return (
         "function(data, type, row, meta) {"
         f""" if (type === 'display') return '<a href="{url}">{label}</a>'; else return data;"""
@@ -59,10 +99,27 @@ def datatable_render_link(url: str, label: str = "'+data+'") -> str:
 
 
 def render_link(url, label):
+    """TODO-report what is this used for?
+
+    Args:
+        url:
+        label:
+
+    Returns:
+
+    """
     return f'<a href="{url}">{label}</a>'
 
 
 def table_labels(column_descs: Mapping) -> Mapping:
+    """TODO-report somewho needed for datatable
+
+    Args:
+        column_descs:
+
+    Returns:
+
+    """
     return {
         col_desc["db"]["data"]: col_desc["db"]["label"]
         for col_desc in column_descs
@@ -70,32 +127,14 @@ def table_labels(column_descs: Mapping) -> Mapping:
     }
 
 
-def admin_required(func):
-    @wraps(func)
-    def decorated_view(*args, **kwargs):
-        if (
-            current_user is None
-            or not current_user.is_authenticated
-            or not current_user.is_admin
-        ):
-            flash_permission_denied()
-            return redirect(url_for("main.index"))
-        return func(*args, **kwargs)
-
-    return decorated_view
-
-
-@login.unauthorized_handler
-def unauthorized_callback():
-    return redirect(url_for("main.signin", next=request.path))
-
-
+# TODO-report what is this for? Make a class from it
 _DATATABLE = {}
 
 
+# TODO-report
 def register_datatable_query(
     query_name: str, model, schema, query_desc, callback: Optional[Callable] = None
-):
+) -> None:
     if not callback:
         callback = _true
     _DATATABLE[query_name] = {
@@ -106,16 +145,19 @@ def register_datatable_query(
     }
 
 
+# TODO-report map queries to callbacks. Make a class from it.
 _AUTOCOMPLETE: MutableMapping = {}
 
 
-def _true():
+# TODO-report
+def _true() -> bool:
     return True
 
 
+# TODO-report
 def register_autocomplete(
-    model_name: str, model, column: str, callback: Optional[Callable] = None
-):
+    model_name: str, model: "db.Model", column: str, callback: Optional[Callable] = None
+) -> None:
     model_meta = _AUTOCOMPLETE.setdefault(model_name.title(), {})
     if not model_meta:
         model_meta["model"] = model
@@ -127,7 +169,9 @@ def register_autocomplete(
 
 
 class TqdmLoggingHandler(logging.StreamHandler):
-    def emit(self, record):
+    """Logging handler for tqdm and multi-threaded application."""
+
+    def emit(self, record: "LogRecord") -> None:
         try:
             msg = self.format(record)
             tqdm.write(msg)

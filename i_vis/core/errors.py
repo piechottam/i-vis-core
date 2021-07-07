@@ -1,12 +1,19 @@
+"""Exception handling.
+"""
+
 from typing import Any, Mapping, Optional
 
-from flask import jsonify, flash
+from flask import jsonify, flash, Response
+
+# TODO flask Exception handling
 
 
 class InvalidUsage(Exception):
     status_code = 400
 
-    def __init__(self, message: str, status_code: Optional[int] = None, payload: Any = None):
+    def __init__(
+        self, message: str, status_code: Optional[int] = None, payload: Any = None
+    ):
         Exception.__init__(self)
         self.message = message
         if status_code is not None:
@@ -14,9 +21,9 @@ class InvalidUsage(Exception):
         self.payload = payload
 
     def to_dict(self) -> Mapping[str, Any]:
-        rv = dict(self.payload or ())
-        rv["message"] = self.message
-        return rv
+        ret = dict(self.payload or ())
+        ret["message"] = self.message
+        return ret
 
 
 class DuplicateError(InvalidUsage):
@@ -31,22 +38,22 @@ class NotFoundError(InvalidUsage):
 
 class IllegalAccessError(InvalidUsage):
     def __init__(self) -> None:
-        super().__init__("Permission deniet.", 400)
+        super().__init__("Permission denied.", 400)
 
 
 class MissingDataError(InvalidUsage):
-    def __init__(self, entity) -> None:
-        super().__init__(f"Missing {entity}.", 400)
+    def __init__(self, data) -> None:
+        super().__init__(f"Missing {data}.", 400)
 
 
-def handle_invalid_usage(error):
+def handle_invalid_usage(error) -> Response:
     response = jsonify(error.to_dict())
     response.status_code = error.status_code
     return response
 
 
-def flash_permission_denied(extra: Optional[str] = None):
-    msg = "Permission deniet."
+def flash_permission_denied(extra: Optional[str] = None) -> None:
+    msg = "Permission denied."
     if extra is not None:
         msg += extra
     flash(msg, category="error")
@@ -65,7 +72,7 @@ def flash_duplicate(
 
 
 def flash_not_found(entity: str, value: Any, extra: Optional[str] = None) -> None:
-    msg = f'{entity}: "{str(value)}" not fount.'
+    msg = f'{entity}: "{str(value)}" not found.'
     if extra is not None:
         msg += extra
     flash(msg, category="error")

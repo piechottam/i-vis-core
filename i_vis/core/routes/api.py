@@ -1,28 +1,27 @@
-from typing import Any, MutableMapping, TYPE_CHECKING
+"""
+API specific methods.
+"""
+from typing import Any, MutableMapping
 
-from flask import (
-    Blueprint,
-    jsonify,
-    request
-)
+import hgvs.parser
+from flask import Blueprint, jsonify, request, Response
 from flask_login.utils import login_required
 from hgvs.enums import ValidationLevel
 from sqlalchemy import desc
-import hgvs.parser
 
-from ..errors import InvalidUsage
 from ..utils import _AUTOCOMPLETE, _DATATABLE
-
-if TYPE_CHECKING:
-    from flask import Response
-
 
 bp = Blueprint("api", __name__, url_prefix="/api")
 
 
+# TODO api description
+# add swagger description here
+
+
+# TODO-report
 @login_required
 @bp.route("/autocomplete/<string:model_name>/<string:column>", methods=["GET", "POST"])
-def autocomplete(model_name: str, column: str) -> "Response":
+def autocomplete(model_name: str, column: str) -> Response:
     response: MutableMapping[str, Any] = {"found": ()}
     query = request.args.get("q")
     if query is None or len(query) < 3:
@@ -43,14 +42,15 @@ def autocomplete(model_name: str, column: str) -> "Response":
     return jsonify(response)
 
 
+# TODO-report
 @login_required
 @bp.route("/datatable/<string:query_name>", methods=["GET", "POST"])
-def datatable(query_name: str) -> "Response":
+def datatable(query_name: str) -> Response:
     query_meta = _DATATABLE.get(query_name)
     if query_meta is None:
         return jsonify({"error": "Unknown query."}), 405
     if not query_meta["callback"]():
-        return jsonify({"error": "Permission deniet."}), 403
+        return jsonify({"error": "Permission denied."}), 403
 
     model = query_meta["model"]
     query = model.query
@@ -112,18 +112,18 @@ def datatable(query_name: str) -> "Response":
     )
 
 
+# TODO move to api
 hgvs_parser = hgvs.parser.Parser()
 
-
+# TODO move to api
 @bp.route("/validate-variants", methods=["GET", "POST"])
-def validate_variants() -> "Response":
+def validate_variants() -> Response:
     data = request.get_json()
     if data is None:
         return jsonify({"error": "No variants in request"}), 403
 
     validated_vars = []
     for var_id, var in enumerate(data.get("variants")):
-        # pylint: disable=maybe-no-member
         parsed = hgvs_parser.parse_hgvs_variant(var)
         validation = tuple(
             obj for obj in parsed.validate() if not isinstance(obj, ValidationLevel)
