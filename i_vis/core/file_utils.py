@@ -1,6 +1,6 @@
 """Utils for files.
 """
-
+import datetime
 import hashlib
 import logging
 import os
@@ -40,7 +40,7 @@ def prefix_fname(fname: str, pre: str, tag: Optional[str] = None) -> str:
     dname = os.path.dirname(fname)
     if dname:
         dname = dname + "/"
-    fname = os.path.basename(fname)
+    fname = os.path.basename(fname).lstrip("_")
     if tag:
         pre = f"{pre}-{tag}"
     pre = f"{pre}-"
@@ -111,10 +111,12 @@ def lines(fname: str) -> int:
     Returns:
         Line count of filename.
     """
-    return sum(1 for _ in open(fname, "rb"))
+
+    with open(fname, "rb") as file:
+        return sum(1 for _ in file)
 
 
-def clean(s: str) -> str:
+def clean_fname(s: str) -> str:
     """
 
     Args:
@@ -168,3 +170,44 @@ def modified(fname: str) -> float:
         Modified time of filename.
     """
     return os.stat(fname).st_mtime
+
+
+def modified_datetime(fname: str) -> datetime.datetime:
+    return datetime.datetime.fromtimestamp(modified(fname))
+
+
+def path_size(path: str) -> int:
+    for root, dirs, files in os.walk(path):
+        return sum(os.path.getsize(os.path.join(root, file)) for file in files)
+
+
+def file_count(path: str) -> int:
+    for root, dirs, files in os.walk(path):
+        return len(files)
+
+
+def latest_modified_date(path: str) -> int:
+    for root, dirs, files in os.walk(path):
+        latest_ = max(modified(os.path.join(root, file)) for file in files)
+        return datetime.date.fromtimestamp(latest_)
+
+def path_md5(path: str) -> str:
+    """MD5 hash value for a file.
+
+    Args:
+        fname: File to calculate MD5.
+
+    Returns:
+        MD5 hash for filename.
+    """
+
+    md5h = hashlib.md5()
+    for root, dirs, fnames in os.walk(path):
+        for fname in fnames:
+            with open(os.path.join(path, fname), "rb") as file:
+                while True:
+                    data = file.read(1024 * 64)
+                    if not data:
+                        break
+                    md5h.update(data)
+    return md5h.hexdigest()

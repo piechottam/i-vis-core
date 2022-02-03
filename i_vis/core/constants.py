@@ -15,4 +15,4 @@ class Strand(Enum):
 
 
 #: Default length of API token.
-API_TOKEN_LENGTH = 32
+API_TOKEN_LENGTH: int = 32

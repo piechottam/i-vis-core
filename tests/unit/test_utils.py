@@ -1,6 +1,6 @@
 # pylint: disable=redefined-outer-name
 from enum import Enum
-from typing import Type
+from typing import Type, Sequence
 
 import pytest
 
@@ -56,3 +56,37 @@ def test_register_datatable_query() -> None:
 def test_register_autocomplete() -> None:
     # TODO-report
     assert False
+
+
+@pytest.mark.parametrize(
+    "strs,expected",
+    [
+        (
+            [
+                "Cancer-Type",
+            ],
+            "CancerType",
+        ),
+        (
+            [
+                "Result",
+                "Schema",
+            ],
+            "ResultSchema",
+        ),
+        (
+            [
+                "raw_data",
+            ],
+            "RawData",
+        ),
+        (
+            ["val1"],
+            "Val1",
+        ),
+        (["val1", "val2"], "Val1Val2"),
+        (["", "val1", "", "val2", ""], "Val1Val2"),
+    ],
+)
+def test_class_name(strs: Sequence[str], expected) -> None:
+    assert utils.class_name(*strs) == expected

@@ -1,7 +1,6 @@
 """ Manages config and meta info.
 """
 
-import os
 from typing import Any, Mapping, MutableMapping, Optional, Sequence
 
 from flask import current_app
@@ -37,6 +36,11 @@ class ConfigMeta:
         self._name2var: MutableMapping[str, Any] = {}
         self._pname2vars: MutableMapping[str, MutableMapping[str, Any]] = {}
 
+    def clear(self) -> None:
+        self._name2var.clear()
+        self._pname2vars.clear()
+
+    # pylint: disable=too-many-arguments
     def register_variable(
         self,
         name: str,
@@ -98,6 +102,7 @@ class ConfigMeta:
         .. seealso:: :method:`ConfigMeta._register_var`
         .. seealso:: TODO reference show all variables
         """
+
         return self.register_variable(
             name=name, vtype="plugin", required=required, pname=pname, default=default
         )
@@ -199,16 +204,15 @@ def variable_name(name: str, pname: Optional[str] = None) -> str:
     Returns:
         Formatted variable name.
     """
-    if pname:
+    if pname and not pname.startswith("i-vis-"):
         return f"I_VIS_{pname}_{name}".upper()
     return f"I_VIS_{name}".upper()
 
+def add_i_vis(name: str, value: Any) -> None:
+    current_app.config[variable_name(name)] = value
 
-def add_secret_key(cookie_name: str, secret_key: Optional[str] = None) -> None:
-    """Add secret key."""
-    current_app.config.update(
-        SECRET_KEY=secret_key if secret_key is not None else os.urandom(24),
-        SESSION_COOKIE_SECURE=True,
-        SESSION_COOKIE_NAME=cookie_name,
-        WTF_CSRF_TIME_LIMIT=None,
-    )
+def get_ivis(name: str, default: Optional[Any] = None) -> Any:
+    return current_app.config.get(variable_name(name), default)
+
+def require_ivis(name: str) -> Any:
+    return current_app.config[variable_name(name)]

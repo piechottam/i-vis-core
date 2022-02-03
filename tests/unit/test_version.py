@@ -326,6 +326,21 @@ class TestDefault:
         assert version.Default.from_str(s) == expected
 
 
+@pytest.mark.parametrize(
+    "s,expected",
+    [
+        ("1.1.1", version.Default(1, 1, 1)),
+        ("1.0.0", version.Default(1, 0, 0)),
+        ("1.1", version.Default(1)),
+        ("1", version.Default(1)),
+        ("2020_01_25", version.Date(datetime.date(year=2020, month=1, day=25))),
+        ("4.1a", version.Default(major=1, minor=1, suffix="a")),
+    ],
+)
+def test_from_str(s: str, expected: version.Version) -> None:
+    assert version.from_str() == expected
+
+
 def test_by_xpath() -> None:
     assert False
 

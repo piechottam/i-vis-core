@@ -10,11 +10,21 @@ from typing import Any, Sequence, Type
 from inflection import underscore
 from sqlalchemy import inspect
 from sqlalchemy.sql import func
-from sqlalchemy.sql.selectable import TableClause
+
+from flask_sqlalchemy.model import DefaultMeta
 
 from .db import db
 
 logger = getLogger()
+
+
+PREFIX = "i_vis"
+def i_vis_col(col: str) -> str:
+    return "_".join([PREFIX, col])
+
+
+def i_vis_cols(cols: Sequence[str]) -> Sequence[str]:
+    return tuple(i_vis_col(col) for col in cols)
 
 
 def fname2tname(fname: str) -> str:
@@ -39,7 +49,7 @@ def fname2tname(fname: str) -> str:
     return tname
 
 
-def get_model(tname: str) -> TableClause:
+def get_table(tname: str) -> DefaultMeta:
     """Get model for table name.
 
     Args:
@@ -52,8 +62,9 @@ def get_model(tname: str) -> TableClause:
         KeyError if ``tname`` is not found
     """
     for model in db.Model.__subclasses__():
-        if model.__tablename__ == tname:
+        if hasattr(model, "__tablename__") and model.__tablename__ == tname:
             return model
+
     raise KeyError(tname)
 
 
@@ -91,23 +102,25 @@ def row_count(tname: str) -> int:
     Returns:
         The number of rows for a table.
     """
-    model = get_model(tname)
-    primary_key = model.__mapper__.primary_key[0].name
-    return int(db.session.query(func.count(getattr(model, primary_key))).scalar())
+
+    table = get_table(tname)
+    # TODO TEST primary_key = model.__mapper__.primary_key[0].name
+    pks = tuple(pk for pk in table.__table__.primary_key.columns)
+    return int(db.session.query(func.count(*pks)).scalar())
     # apparently slower: return model.query.count()
 
 
-def get_column_name(db_column: db.Column) -> str:
+def get_column_name(column: db.Column) -> str:
     with warnings.catch_warnings():
-        return str(getattr(db_column, "name"))
+        return str(getattr(column, "name"))
 
 
 def missing_tables() -> Sequence[str]:
-    insp = inspect(db.engine)
+    obj = inspect(db.engine)
     return [
         table.name
-        for table in db.meta_data.sorted_tables
-        if not insp.dialect.has_table(db.engine.connect(), table.name)
+        for table in db.metadata.sorted_tables
+        if not obj.dialect.has_table(db.engine.connect(), table.name)
     ]
 
 

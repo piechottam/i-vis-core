@@ -7,11 +7,11 @@ Import and execute ``login.init_app(app)`` in a factory function to use.
 from typing import Any, Callable, TYPE_CHECKING
 from functools import wraps
 
-from flask import redirect, request, url_for
+from flask import redirect, request, url_for, current_app
 from flask_login import current_user
 from flask_login.login_manager import LoginManager
 
-from .errors import flash_permission_denied
+from .errors import IllegalAccessError
 
 if TYPE_CHECKING:
     from werkzeug.wrappers import Response
@@ -30,14 +30,16 @@ def admin_required(func: Callable) -> Callable:
     """
 
     @wraps(func)
-    def decorated_view(*args, **kwargs) -> Any:
-        if (
+    def decorated_view(*args: Any, **kwargs: Any) -> Any:
+        if not current_app.config.get("LOGIN_DISABLED", True) and (
             current_user is None
             or not current_user.is_authenticated
             or not current_user.is_admin
         ):
-            flash_permission_denied()
-            return redirect(url_for("main.index"))
+            # TODO
+            # move flash_permission_denied()
+            # move return redirect(url_for("main.index"))
+            raise IllegalAccessError
         return func(*args, **kwargs)
 
     return decorated_view

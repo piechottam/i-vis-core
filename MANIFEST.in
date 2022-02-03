@@ -3,6 +3,7 @@ include LICENSE.txt
 graft docs
 prune docs/_build
 graft tests
+include i_vis/core/py.typed
 
 # exclude
 global-exclude *.pyc

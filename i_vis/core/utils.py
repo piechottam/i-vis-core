@@ -15,14 +15,19 @@ from typing import (
     TYPE_CHECKING,
 )
 from urllib.parse import urlparse, urljoin
+import re
 
 from flask import request
 from tqdm import tqdm
-
+from requests.exceptions import RequestException
 
 if TYPE_CHECKING:
     from logging import LogRecord
     from .db import db
+
+
+class StatusCode200Error(RequestException):
+    """Status code != 200."""
 
 
 def is_safe_url(target: str) -> bool:
@@ -41,22 +46,23 @@ def is_safe_url(target: str) -> bool:
     return test_url.scheme in ("http", "https") and ref_url.netloc == test_url.netloc
 
 
+# TODO adjust
 class EnumMixin:
     """Mixin provides convenience methods."""
 
     @classmethod
     def from_str(cls, s: str) -> Any:
-        for v in cls:
+        for v in cls:  # type: ignore
             if v.value == s:
                 return v
         raise NotImplementedError
 
     @classmethod
     def values(cls) -> Set[str]:
-        return {e.value for e in cls}
+        return {e.value for e in cls}  # type: ignore
 
 
-def format_datetime(value: datetime.date, format_: str) -> str:
+def format_datetime(value: datetime, format_: str) -> str:
     """TODO-report - a template filter for jinja2
 
     Args:
@@ -133,7 +139,7 @@ _DATATABLE = {}
 
 # TODO-report
 def register_datatable_query(
-    query_name: str, model, schema, query_desc, callback: Optional[Callable] = None
+        query_name: str, model, schema, query_desc, callback: Optional[Callable] = None
 ) -> None:
     if not callback:
         callback = _true
@@ -156,7 +162,7 @@ def _true() -> bool:
 
 # TODO-report
 def register_autocomplete(
-    model_name: str, model: "db.Model", column: str, callback: Optional[Callable] = None
+        model_name: str, model: "db.Base", column: str, callback: Optional[Callable] = None
 ) -> None:
     model_meta = _AUTOCOMPLETE.setdefault(model_name.title(), {})
     if not model_meta:
@@ -180,3 +186,13 @@ class TqdmLoggingHandler(logging.StreamHandler):
             raise
         except:  # pylint: disable=W0702
             self.handleError(record)
+
+
+CLASS_NAME_REGEX = re.compile("([ _-]*)([^ _-]+)")
+
+
+def class_name(*names: str) -> str:
+    def helper(match: re.Match) -> str:
+        return match.group(2)[0].upper() + match.group(2)[1:]
+
+    return "".join(CLASS_NAME_REGEX.sub(helper, name) for name in names)

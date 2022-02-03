@@ -1,7 +1,8 @@
 """
 API specific methods.
 """
-from typing import Any, MutableMapping
+
+from typing import Any, MutableMapping, Tuple
 
 import hgvs.parser
 from flask import Blueprint, jsonify, request, Response
@@ -45,7 +46,7 @@ def autocomplete(model_name: str, column: str) -> Response:
 # TODO-report
 @login_required
 @bp.route("/datatable/<string:query_name>", methods=["GET", "POST"])
-def datatable(query_name: str) -> Response:
+def datatable(query_name: str) -> Tuple[Response, int]:
     query_meta = _DATATABLE.get(query_name)
     if query_meta is None:
         return jsonify({"error": "Unknown query."}), 405
@@ -102,29 +103,33 @@ def datatable(query_name: str) -> Response:
     if values:
         draw = int(values.get("draw", 0))
 
-    return jsonify(
-        {
-            "draw": draw + 1,
-            "data": data,
-            "recordsTotal": total,
-            "recordsFiltered": filtered,
-        }
+    return (
+        jsonify(
+            {
+                "draw": draw + 1,
+                "data": data,
+                "recordsTotal": total,
+                "recordsFiltered": filtered,
+            },
+        ),
+        200,
     )
 
 
 # TODO move to api
 hgvs_parser = hgvs.parser.Parser()
 
+
 # TODO move to api
 @bp.route("/validate-variants", methods=["GET", "POST"])
-def validate_variants() -> Response:
+def validate_variants() -> Tuple[Response, int]:
     data = request.get_json()
     if data is None:
         return jsonify({"error": "No variants in request"}), 403
 
     validated_vars = []
     for var_id, var in enumerate(data.get("variants")):
-        parsed = hgvs_parser.parse_hgvs_variant(var)
+        parsed = hgvs_parser.parse(var)
         validation = tuple(
             obj for obj in parsed.validate() if not isinstance(obj, ValidationLevel)
         )
@@ -144,4 +149,4 @@ def validate_variants() -> Response:
         "recordsTotal": len(validated_vars),
     }
 
-    return jsonify(response)
+    return jsonify(response), 200

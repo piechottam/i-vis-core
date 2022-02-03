@@ -2,7 +2,9 @@
 User specific routes.
 """
 
-from flask import Blueprint, render_template, redirect, url_for, flash, Response
+from typing import Union
+from werkzeug.wrappers import Response
+from flask import Blueprint, render_template, redirect, url_for, flash
 from flask_login import current_user
 from flask_login.utils import login_required
 
@@ -40,7 +42,7 @@ def index() -> str:
 @bp.route("/add", methods=["GET", "POST"])
 @admin_required
 @login_required
-def add() -> Response:
+def add() -> Union[str, Response]:
     form = UserForm()
     if form.validate_on_submit():
         user = User.load_by_name(form.name.data)
@@ -63,7 +65,7 @@ def add() -> Response:
 @bp.route("/show/<int:user_id>", methods=["GET", "POST"])
 @admin_required
 @login_required
-def show(user_id: int):
+def show(user_id: int) -> Union[str, Response]:
     user_id = int(user_id)
     user = User.query.get(user_id)
     if user is None:
@@ -75,7 +77,7 @@ def show(user_id: int):
 @bp.route("/edit/<int:user_id>", methods=["GET", "POST"])
 @admin_required
 @login_required
-def edit(user_id: int):
+def edit(user_id: int) -> Union[str, Response]:
     form = ChangeUserForm()
     if form.validate_on_submit():
         user = User.query.get(user_id)

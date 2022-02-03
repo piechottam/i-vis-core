@@ -13,26 +13,29 @@ import http
 import math
 from copy import deepcopy
 from dataclasses import dataclass
-from functools import wraps
+from functools import wraps, cache
 from typing import (
     Any,
+    cast,
     Callable,
     Generic,
+    MutableMapping,
     TypeVar,
     Mapping,
     Optional,
     Sequence,
+    Union,
 )
 
 import flask_smorest
 from flask_smorest.utils import unpack_tuple_response
 from flask import request
-from marshmallow import EXCLUDE, post_load
+from marshmallow import RAISE, EXCLUDE, post_load
 from marshmallow.validate import Range
 from webargs.flaskparser import FlaskParser
 
-from .db import db
 from .ma import ma
+from .db import db
 
 #: Default values for pagination parameters
 CURRENT_ID = 1
@@ -44,16 +47,23 @@ SIZE = 50
 MAX_SIZE = 100
 
 
+class StrictFlaskParser(FlaskParser):
+    DEFAULT_UNKNOWN_BY_LOCATION = {
+        "query": RAISE,
+    }
+
+
 class PaginationParameters:
     """Container for pagination parameters."""
 
-    def __init__(self, current_id: int, size: int) -> None:
+    def __init__(self, current_id: int, size: int, max_size: int) -> None:
         self.current_id = current_id
         self.size = size
+        self.max_size = max_size
 
     def __repr__(self) -> str:
-        return "{}(current_id={!r},size={!r})".format(
-            self.__class__.__name__, self.current_id, self.size
+        return "{}(current_id={!r},size={!r},max_size={!r})".format(
+            self.__class__.__name__, self.current_id, self.size, self.max_size
         )
 
 
@@ -88,14 +98,23 @@ class PaginatedResult:
         self,
         results: Sequence[Any],
         pager_info: PagerInfo,
+        keys: Optional[Sequence[Any]] = None,
+        links: Optional[Mapping[str, Any]] = None,
     ) -> None:
+        if keys:
+            self.data = dict(zip(keys, results))
+        else:
+            self.data = results
+        self.keys = keys
         self.results = results
         self.pager_info = pager_info
+        self.links = links
 
 
 T = TypeVar("T")
 
 
+@cache
 def create_pagination_args_schema(
     current_id_: int = CURRENT_ID,
     size_: int = SIZE,
@@ -111,13 +130,18 @@ def create_pagination_args_schema(
             missing=size_,
             validate=Range(min=1, max=max_size_),
         )
+        max_size = ma.Constant(max_size_)
 
         @post_load
-        # pylint: disable=unused-argument,no-self-use
+        # pylint: disable=no-self-use
         def make_parameters(
-            self, data: Mapping[str, Any], **kwargs: Any
+            self, data: Mapping[str, Any], **_kwargs: Any
         ) -> PaginationParameters:
-            return PaginationParameters(**data)
+            return PaginationParameters(
+                current_id=data.get("current_id", current_id_),
+                size=data.get("size", size_),
+                max_size=data.get("max_size", max_size_),
+            )
 
     return PaginationArgumentsSchema
 
@@ -166,19 +190,26 @@ def get_next_id(current_id: int, size: int, total: int) -> Optional[int]:
     return None
 
 
-class ListPager(Pager[Sequence[Any]]):
-    """Pager for list like containers."""
+@dataclass
+class DictWrapper:
+    #: Query that produces results to paginate
+    results: Mapping[Any, Any]
+    #: links
+    links: MutableMapping[str, Union[str, Callable[[int], str]]]
 
+
+class DictPager(Pager[DictWrapper]):
     def __init__(self, **kwargs: Any) -> None:
         kwargs.setdefault("current_id", 0)
         super().__init__(**kwargs)
 
     def paginated_result(
-        self, obj: Sequence[Any], parameters: PaginationParameters
+        self, obj: DictWrapper, parameters: PaginationParameters
     ) -> PaginatedResult:
         current_id = parameters.current_id
         size = parameters.size
-        total = len(obj)
+        results = obj.results
+        total = len(results)
 
         pager_info = PagerInfo(
             pagination_params=parameters,
@@ -186,11 +217,21 @@ class ListPager(Pager[Sequence[Any]]):
             total=total,
         )
 
-        # fmt: off
-        results = obj[current_id:(current_id + size)]
-        # fmt: on
+        links = dict(obj.links)
+        if pager_info.next_id:
+            links["next"] = links["next"](pager_info.next_id)
+        else:
+            links.pop("next", None)
 
-        return PaginatedResult(results=results, pager_info=pager_info)
+        keys = list(results.keys())
+        values = list(results.values())
+
+        return PaginatedResult(
+            results=values[current_id:(current_id + size)],
+            keys=keys,
+            pager_info=pager_info,
+            links=links,
+        )
 
 
 @dataclass
@@ -201,6 +242,8 @@ class QueryWrapper:
     column: db.Column
     #: Query that produces results to paginate
     query: db.Query
+    #: links
+    links: MutableMapping[str, Union[str, Callable[[int], str]]]
 
 
 class QueryPager(Pager[QueryWrapper]):
@@ -236,13 +279,18 @@ class QueryPager(Pager[QueryWrapper]):
             next_id=next_id,
         )
 
-        return PaginatedResult(results=results, pager_info=pager_info)
+        links = dict(obj.links)
+        if pager_info.next_id:
+            links["next"] = links["next"](pager_info.next_id)
+        else:
+            links.pop("next", None)
+        return PaginatedResult(results=results, pager_info=pager_info, links=links)
 
 
 class KeySetPaginationMixin:
     """KeySet pagination."""
 
-    ARGUMENTS_PARSER = FlaskParser()
+    KEYSET_PAGINATION_PARSER = FlaskParser()
 
     @classmethod
     def _parse_request(cls, params_schema: ma.Schema) -> PaginationParameters:
@@ -254,8 +302,10 @@ class KeySetPaginationMixin:
         Returns:
 
         """
-        return KeySetPaginationMixin.ARGUMENTS_PARSER.parse(
-            params_schema, request, location="query"
+
+        return cast(
+            PaginationParameters,
+            KeySetPaginationMixin.KEYSET_PAGINATION_PARSER.parse(params_schema, request, location="query"),
         )
 
     @classmethod
@@ -273,9 +323,8 @@ class KeySetPaginationMixin:
         Returns:
 
         """
-        error_status_code = (
-            KeySetPaginationMixin.ARGUMENTS_PARSER.DEFAULT_VALIDATION_STATUS
-        )
+
+        error_status_code = Blueprint.ARGUMENTS_PARSER.DEFAULT_VALIDATION_STATUS
 
         # Add pagination params to doc info in wrapper object
         # pylint: disable=protected-access
@@ -295,7 +344,7 @@ class KeySetPaginationMixin:
 
     def keyset_paginate(
         self,
-        pager: Optional[Pager[T]] = None,
+        pager: Pager[T],
         current_id: int = CURRENT_ID,
         size: int = SIZE,
         max_size: int = MAX_SIZE,
@@ -314,36 +363,18 @@ class KeySetPaginationMixin:
             Paginated date.
         """
 
-        if pager:
-            parameters_schema = pager.create_schema()
-        else:
-            parameters_schema = create_pagination_args_schema(
-                current_id, size, max_size
-            )
+        parameters_schema = pager.create_schema()
 
-        def decorator(func: Callable[[Any], Any]) -> Callable[[Any], Any]:
+        def decorator(func: Callable) -> Callable:
             @wraps(func)
             def wrapper(*args: Any, **kwargs: Any) -> Any:
                 parameters = self._parse_request(parameters_schema)
 
-                if pager is None:
-                    kwargs["pagination_params"] = parameters
-
                 obj, status, headers = unpack_tuple_response(func(*args, **kwargs))
+                paginated_result = pager.paginated_result(obj, parameters)
+                return paginated_result, status, headers
 
-                if pager is None:
-                    paginated_result = obj
-                else:
-                    paginated_result = pager.paginated_result(obj, parameters)
-
-                results = {
-                    "data": paginated_result.results,
-                    "pager_info": paginated_result.pager_info,
-                    "links": {},
-                }
-                return results, status, headers
-
-            self._add_api_doc(wrapper, parameters_schema)
+            # TODO remove self._add_api_doc(wrapper, parameters_schema)
             return wrapper
 
         return decorator
@@ -351,3 +382,5 @@ class KeySetPaginationMixin:
 
 class Blueprint(KeySetPaginationMixin, flask_smorest.Blueprint):
     """Extend flask_smorest.Blueprint with keyset pagination."""
+
+    ARGUMENTS_PARSER = StrictFlaskParser()

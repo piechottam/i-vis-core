@@ -22,7 +22,10 @@ with open(os.path.join(here, "i_vis", "core", "__version__.py"), "r") as f:
 setup(
     version=version["__VERSION__"],
     packages=find_namespace_packages(include=["i_vis.core.*"]),
-    package_data={"": ["LICENSE.txt"]},
+    package_data={
+        "": ["LICENSE.txt"],
+        "i_vis.core": ["py.typed"],
+    },
     install_requires=requires,
     tests_require=test_require,
 )

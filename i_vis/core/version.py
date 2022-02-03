@@ -25,6 +25,9 @@ import re
 import requests
 from lxml import etree
 
+from .utils import StatusCode200Error
+
+
 #: Maximum allowed version length.
 MAX_VERSION_LENGTH = 20
 #: Default date format to store version info
@@ -32,9 +35,11 @@ DATE_FORMAT = "%Y_%m_%d"
 
 
 class UnknownVersionError(Exception):
-    def __init__(self, unknown: str, **kwargs: Any) -> None:
-        super().__init__(**kwargs)
-        self.unknown = unknown
+    pass
+
+
+class ParseError(Exception):
+    pass
 
 
 class Version:
@@ -120,8 +125,9 @@ class Date(Version):
             year=self.date.year, month=self.date.month, day=self.date.day
         )
 
+    # FIXME raise exceptions
     @staticmethod
-    def from_url(url: str, **kwargs: Any) -> Optional["Date"]:
+    def from_url(url: str, **kwargs: Any) -> "Date":
         """Create version from date info for an url.
 
         Args:
@@ -131,10 +137,21 @@ class Date(Version):
         Returns:
             :class:`Date` or ``None``, if no date information could be retrieved.
         """
+
         modified = last_modified(url, **kwargs)
-        if modified:
-            return Date(modified)
-        return None
+        if not modified:
+            raise ValueError(f"Could not retrieve last modified from '{url}'.")
+
+        return Date(modified)
+
+    @staticmethod
+    def from_xpath(url: str, xpath: str, format_: str) -> "Date":
+        s = by_xpath(url, xpath)
+        # connection error
+        # parse error
+        date = datetime.datetime.strptime(s, format_)
+        # format error
+        return Date(date)
 
     @staticmethod
     def from_str(s: str) -> "Date":
@@ -157,6 +174,7 @@ class Default(Version):
     Capture format: [pre-]major.minor.patch[-suffix]
     """
 
+    # pylint: disable=too-many-arguments
     def __init__(
         self,
         major: int,
@@ -165,6 +183,8 @@ class Default(Version):
         prefix: str = "",
         suffix: str = "",
     ) -> None:
+        # TODO check types
+
         self.major = major
         self.minor = minor
         self.patch = patch
@@ -211,6 +231,17 @@ class Default(Version):
             else:
                 matched[key] = value
         return Default(**matched)
+
+
+# FIMXE DateVerion parse as DefaultVersion
+# def from_str(s: str) -> "Version":
+#    for obj in (Default, Date):
+#        try:
+#            return obj.from_str(s)
+#        except ValueError:
+#            continue
+#
+#    raise ParseError(s)
 
 
 def less_than(self: Version, other: Version, attrs: Sequence[str]) -> bool:
@@ -261,11 +292,11 @@ def by_xpath(url: str, xpath: str, **kwargs: Any) -> str:
 
     r = requests.get(url, timeout=100, **kwargs)
     if r.status_code != 200:
-        raise ValueError(f"Status code ({r.status_code}) != 200")
+        raise StatusCode200Error(reponse=r)
 
     parser = etree.HTMLParser()
-    tree = etree.fromstring(r.text, parser=parser)
-    return str(tree.xpath(xpath).pop().text)
+    tree = etree.fromstring(r.text, parser=parser)  # type: ignore
+    return str(tree.xpath(xpath).pop().text)  # type: ignore
 
 
 def last_modified(

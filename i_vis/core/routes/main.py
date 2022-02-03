@@ -3,6 +3,8 @@ Main routes.
 
 """
 
+from typing import Union
+from werkzeug.wrappers import Response
 from flask import abort, Blueprint, flash, render_template, redirect, request, url_for
 from flask_login import current_user, login_user, logout_user
 from flask_login.utils import login_required
@@ -19,12 +21,12 @@ bp = Blueprint("main", __name__)
 @bp.route("/index", methods=["GET", "POST"])
 @bp.route("/", methods=["GET", "POST"])
 @login_required
-def index():
+def index() -> str:
     return render_template("home.jinja", current_user=current_user)
 
 
 @bp.route("/signin", methods=["GET", "POST"])
-def signin():
+def signin() -> Union[str, Response]:
     if current_user.is_authenticated:
         return redirect(url_for("main.index"))
     form = SignInForm()
@@ -45,7 +47,7 @@ def signin():
 
 @bp.route("/signout")
 @login_required
-def signout():
+def signout() -> Response:
     if current_user.is_authenticated:
         logout_user()
         flash("Sign out successful.", category="success")
@@ -53,7 +55,7 @@ def signout():
 
 
 @bp.route("/forgot-password", methods=["GET", "POST"])
-def forgot_password():
+def forgot_password() -> Union[str, Response]:
     #     if current_user.is_authenticated:
     #         return redirect(url_for("main.index"))
     #     form = ForgotPasswordForm()
@@ -92,7 +94,7 @@ def forgot_password():
 
 @bp.route("/account", methods=["GET", "POST"])
 @login_required
-def account():
+def account() -> str:
     form = ChangeUserForm(obj=current_user)
     if form.validate_on_submit():
         if form.password.data and current_user.check_password(form.current.data):
@@ -110,7 +112,7 @@ def account():
 @bp.route("/settings", methods=["GET", "POST"])
 @admin_required
 @login_required
-def show_settings():
+def show_settings() -> str:
     settings = {
         setting.variable: str(setting.value)
         for setting in Setting.query.order_by(Setting.variable).all()

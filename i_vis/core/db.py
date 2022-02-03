@@ -11,9 +11,15 @@ convention = {
     "fk": "fk_%(table_name)s_%(column_0_name)s_%(referred_table_name)s",
     "pk": "pk_%(table_name)s",
 }
+engine_options = {
+    "max_identifier_length": 64,
+}
+session_options = {
+    "expire_on_commit": False,
+}
 metadata = MetaData(naming_convention=convention)
 db = SQLAlchemy(
     metadata=metadata,
-    engine_options={"max_identifier_length": 64},
-    session_options={"expire_on_commit": False},
+    engine_options=engine_options,
+    session_options=session_options,
 )

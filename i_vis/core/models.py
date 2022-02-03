@@ -2,14 +2,14 @@
 User core models and functions.
 """
 
-from typing import Any, Callable, Optional
+from typing import Any, cast, Callable, Optional, Union
 
 from flask_login.mixins import UserMixin
 from sqlalchemy.sql import func
+from marshmallow_sqlalchemy import SQLAlchemyAutoSchema  # type: ignore
 from werkzeug.security import generate_password_hash, check_password_hash
 
 from .db import db
-from .ma import ma
 
 
 def load_user(user_id: int) -> Optional["User"]:
@@ -21,10 +21,14 @@ def load_user(user_id: int) -> Optional["User"]:
     Returns:
         User identified with ``user_id``.
     """
-    return User.query.get(int(user_id))
+    user = User.query.get(int(user_id))
+    if user:
+        return cast(User, user)
 
+    return None
 
-def wrap_func(col, func_: Callable) -> Callable:
+#  replace any with column type
+def wrap_func(col: Union[str, Any], func_: Callable) -> Callable:
     """Wrap a function with current context of col.
 
     Args:
@@ -33,9 +37,11 @@ def wrap_func(col, func_: Callable) -> Callable:
 
     Returns:
     """
+    if not isinstance(col, str):
+        col = col.key
 
     def wrapped(context) -> Callable:
-        return func_(context.current_parameters.get(col.key))
+        return func_(context.current_parameters.get(col))
 
     return wrapped
 
@@ -67,12 +73,20 @@ class User(db.Model, UserMixin):
     @classmethod
     def load_by_name(cls, name: str) -> Optional["User"]:
         """Load User by name."""
-        return cls.query.filter_by(name=name).first()
+        user = cls.query.filter_by(name=name).first()
+        if user:
+            return cast(User, user)
+
+        return None
 
     @classmethod
     def load_by_mail(cls, mail: str) -> Optional["User"]:
         """Load User by mail."""
-        return cls.query.filter_by(mail=mail).first()
+        user = cls.query.filter_by(mail=mail).first()
+        if user:
+            return cast(User, user)
+
+        return None
 
 
 class Setting(db.Model):
@@ -100,9 +114,9 @@ class Setting(db.Model):
             setting = Setting(variable=variable, value=value)
         else:
             setting.value = value
-        return setting
+        return cast(Setting, setting)
 
 
-class UserSchema(ma.SQLAlchemyAutoSchema):
+class UserSchema(SQLAlchemyAutoSchema):
     class Meta:
         model = User
