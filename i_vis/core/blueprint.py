@@ -284,6 +284,7 @@ class QueryPager(Pager[QueryWrapper]):
             links["next"] = links["next"](pager_info.next_id)
         else:
             links.pop("next", None)
+
         return PaginatedResult(results=results, pager_info=pager_info, links=links)
 
 
