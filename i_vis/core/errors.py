@@ -5,6 +5,7 @@ from typing import Any, Mapping, Optional
 
 from flask import jsonify, flash, Response
 
+
 # TODO flask Exception handling
 
 
@@ -46,7 +47,7 @@ class MissingDataError(InvalidUsage):
         super().__init__(f"Missing {data}.", 400)
 
 
-def handle_invalid_usage(error) -> Response:
+def handle_invalid_usage(error: Any) -> Response:
     response = jsonify(error.to_dict())
     response.status_code = error.status_code
     return response

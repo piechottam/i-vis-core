@@ -25,6 +25,7 @@ from typing import (
     Optional,
     Sequence,
     Union,
+    TYPE_CHECKING
 )
 
 import flask_smorest
@@ -33,9 +34,11 @@ from flask import request
 from marshmallow import RAISE, EXCLUDE, post_load
 from marshmallow.validate import Range
 from webargs.flaskparser import FlaskParser
-
+from sqlalchemy import Column
 from .ma import ma
-from .db import db
+
+if TYPE_CHECKING:
+    from sqlalchemy.orm import Query
 
 #: Default values for pagination parameters
 CURRENT_ID = 1
@@ -62,19 +65,17 @@ class PaginationParameters:
         self.max_size = max_size
 
     def __repr__(self) -> str:
-        return "{}(current_id={!r},size={!r},max_size={!r})".format(
-            self.__class__.__name__, self.current_id, self.size, self.max_size
-        )
+        return f"{self.__class__.__name__}, current_id={self.current_id}, size={self.size}, max_size={self.max_size}"
 
 
 class PagerInfo:
     """Container for pager info."""
 
     def __init__(
-        self,
-        pagination_params: PaginationParameters,
-        total: Optional[int] = None,
-        next_id: Optional[int] = None,
+            self,
+            pagination_params: PaginationParameters,
+            total: Optional[int] = None,
+            next_id: Optional[int] = None,
     ) -> None:
         self.pagination_params = pagination_params
         self.total = total
@@ -95,20 +96,23 @@ class PagerInfo:
 
 class PaginatedResult:
     def __init__(
-        self,
-        results: Sequence[Any],
-        pager_info: PagerInfo,
-        keys: Optional[Sequence[Any]] = None,
-        links: Optional[Mapping[str, Any]] = None,
+            self,
+            results: Sequence[Any],
+            pager_info: PagerInfo,
+            keys: Optional[Sequence[Any]] = None,
+            links: Optional[Mapping[str, Any]] = None,
     ) -> None:
-        if keys:
-            self.data = dict(zip(keys, results))
-        else:
-            self.data = results
         self.keys = keys
         self.results = results
         self.pager_info = pager_info
         self.links = links
+
+    @property
+    def data(self) -> Union[Sequence[Any], Mapping[Any, Any]]:
+        if self.keys:
+            return dict(zip(self.keys, self.results))
+
+        return self.results
 
 
 T = TypeVar("T")
@@ -116,9 +120,9 @@ T = TypeVar("T")
 
 @cache
 def create_pagination_args_schema(
-    current_id_: int = CURRENT_ID,
-    size_: int = SIZE,
-    max_size_: int = MAX_SIZE,
+        current_id_: int = CURRENT_ID,
+        size_: int = SIZE,
+        max_size_: int = MAX_SIZE,
 ) -> ma.Schema:
     class PaginationArgumentsSchema(ma.Schema):
         class Meta:
@@ -135,7 +139,7 @@ def create_pagination_args_schema(
         @post_load
         # pylint: disable=no-self-use
         def make_parameters(
-            self, data: Mapping[str, Any], **_kwargs: Any
+                self, data: Mapping[str, Any], **_kwargs: Any
         ) -> PaginationParameters:
             return PaginationParameters(
                 current_id=data.get("current_id", current_id_),
@@ -150,10 +154,10 @@ class Pager(Generic[T]):
     """Abstract class for a pager."""
 
     def __init__(
-        self,
-        current_id: int = CURRENT_ID,
-        size: int = SIZE,
-        max_size: int = MAX_SIZE,
+            self,
+            current_id: int = CURRENT_ID,
+            size: int = SIZE,
+            max_size: int = MAX_SIZE,
     ) -> None:
         self._current_id = current_id
         self._size = size
@@ -165,7 +169,7 @@ class Pager(Generic[T]):
         )
 
     def paginated_result(
-        self, obj: T, parameters: PaginationParameters
+            self, obj: T, parameters: PaginationParameters
     ) -> PaginatedResult:
         raise NotImplementedError
 
@@ -195,7 +199,9 @@ class DictWrapper:
     #: Query that produces results to paginate
     results: Mapping[Any, Any]
     #: links
-    links: MutableMapping[str, Union[str, Callable[[int], str]]]
+    links: MutableMapping[str, str]
+    #: callback for links next key
+    next_callback: Callable[[int], str]
 
 
 class DictPager(Pager[DictWrapper]):
@@ -204,7 +210,7 @@ class DictPager(Pager[DictWrapper]):
         super().__init__(**kwargs)
 
     def paginated_result(
-        self, obj: DictWrapper, parameters: PaginationParameters
+            self, obj: DictWrapper, parameters: PaginationParameters
     ) -> PaginatedResult:
         current_id = parameters.current_id
         size = parameters.size
@@ -219,15 +225,13 @@ class DictPager(Pager[DictWrapper]):
 
         links = dict(obj.links)
         if pager_info.next_id:
-            links["next"] = links["next"](pager_info.next_id)
-        else:
-            links.pop("next", None)
+            links["next"] = obj.next_callback(pager_info.next_id)
 
         keys = list(results.keys())
         values = list(results.values())
 
         return PaginatedResult(
-            results=values[current_id:(current_id + size)],
+            results=values[current_id: (current_id + size)],
             keys=keys,
             pager_info=pager_info,
             links=links,
@@ -239,18 +243,20 @@ class QueryWrapper:
     """Container for query pager."""
 
     #: Column used for pagination (keyset)
-    column: db.Column
+    column: Column[Any]
     #: Query that produces results to paginate
-    query: db.Query
+    query: "Query[Any]"
     #: links
-    links: MutableMapping[str, Union[str, Callable[[int], str]]]
+    links: MutableMapping[str, str]
+    #: callback next
+    next_callback: Callable[[int], str]
 
 
 class QueryPager(Pager[QueryWrapper]):
     """Query pager for SQLALCHEMY queries."""
 
     def paginated_result(
-        self, obj: QueryWrapper, parameters: PaginationParameters
+            self, obj: QueryWrapper, parameters: PaginationParameters
     ) -> PaginatedResult:
         # convenience
         column = obj.column
@@ -263,9 +269,9 @@ class QueryPager(Pager[QueryWrapper]):
         # process current elements - to be displayed
         results = (
             query.filter(column >= current_id)
-            .order_by(column)
-            .limit(size + 1)  # +1 to capture the next element
-            .all()
+                .order_by(column)
+                .limit(size + 1)  # +1 to capture the next element
+                .all()
         )
         if results and len(results) > size:
             # capture next element
@@ -281,9 +287,7 @@ class QueryPager(Pager[QueryWrapper]):
 
         links = dict(obj.links)
         if pager_info.next_id:
-            links["next"] = links["next"](pager_info.next_id)
-        else:
-            links.pop("next", None)
+            links["next"] = obj.next_callback(pager_info.next_id)
 
         return PaginatedResult(results=results, pager_info=pager_info, links=links)
 
@@ -306,14 +310,16 @@ class KeySetPaginationMixin:
 
         return cast(
             PaginationParameters,
-            KeySetPaginationMixin.KEYSET_PAGINATION_PARSER.parse(params_schema, request, location="query"),
+            KeySetPaginationMixin.KEYSET_PAGINATION_PARSER.parse(
+                params_schema, request, location="query"
+            ),
         )
 
     @classmethod
     def _add_api_doc(
-        cls,
-        wrapper: Callable[[Any], Any],
-        params_schema: ma.Schema,
+            cls,
+            wrapper: Callable[[Any], Any],
+            params_schema: ma.Schema,
     ) -> None:
         """TODO
 
@@ -344,11 +350,11 @@ class KeySetPaginationMixin:
         setattr(wrapper, "_apidoc", apidoc)
 
     def keyset_paginate(
-        self,
-        pager: Pager[T],
-        current_id: int = CURRENT_ID,
-        size: int = SIZE,
-        max_size: int = MAX_SIZE,
+            self,
+            pager: Pager[T],
+            current_id: int = CURRENT_ID,
+            size: int = SIZE,
+            max_size: int = MAX_SIZE,
     ) -> Callable[[Any], Any]:
         """TODO
 
@@ -366,7 +372,7 @@ class KeySetPaginationMixin:
 
         parameters_schema = pager.create_schema()
 
-        def decorator(func: Callable) -> Callable:
+        def decorator(func: Callable[[Any], Any]) -> Callable[[Any], Any]:
             @wraps(func)
             def wrapper(*args: Any, **kwargs: Any) -> Any:
                 parameters = self._parse_request(parameters_schema)

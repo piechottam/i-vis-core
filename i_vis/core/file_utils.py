@@ -144,7 +144,7 @@ def create_dir(dname: str) -> None:
         logging.debug("Created directory: %s", dname)
 
 
-def read_query(fname: str) -> str:
+def read_query(fname: str, encoding: str = "utf8") -> str:
     """Read a query from file.
 
     Read query and remove all white space between tags.
@@ -155,7 +155,7 @@ def read_query(fname: str) -> str:
     Returns:
         Read query.
     """
-    with open(fname, "r") as file:
+    with open(fname, "r", encoding=encoding) as file:
         s = file.read()
         return re.sub(r"\s+(?=<)", "", s)
 
@@ -177,19 +177,26 @@ def modified_datetime(fname: str) -> datetime.datetime:
 
 
 def path_size(path: str) -> int:
-    for root, dirs, files in os.walk(path):
+    for root, _, files in os.walk(path):
         return sum(os.path.getsize(os.path.join(root, file)) for file in files)
+
+    return 0
 
 
 def file_count(path: str) -> int:
-    for root, dirs, files in os.walk(path):
+    for _, _, files in os.walk(path):
         return len(files)
 
+    return 0
 
-def latest_modified_date(path: str) -> int:
-    for root, dirs, files in os.walk(path):
+
+def latest_modified_datetime(path: str) -> datetime.datetime:
+    for root, _, files in os.walk(path):
         latest_ = max(modified(os.path.join(root, file)) for file in files)
-        return datetime.date.fromtimestamp(latest_)
+        return datetime.datetime.fromtimestamp(latest_)
+
+    raise ValueError
+
 
 def path_md5(path: str) -> str:
     """MD5 hash value for a file.
@@ -202,7 +209,7 @@ def path_md5(path: str) -> str:
     """
 
     md5h = hashlib.md5()
-    for root, dirs, fnames in os.walk(path):
+    for _, _, fnames in os.walk(path):
         for fname in fnames:
             with open(os.path.join(path, fname), "rb") as file:
                 while True:

@@ -3,13 +3,17 @@ User core models and functions.
 """
 
 from typing import Any, cast, Callable, Optional, Union
+from secrets import token_urlsafe
 
 from flask_login.mixins import UserMixin
+from sqlalchemy import Column, Integer, String, DateTime, Boolean, PickleType, TIMESTAMP
+from sqlalchemy.engine.default import DefaultExecutionContext
 from sqlalchemy.sql import func
-from marshmallow_sqlalchemy import SQLAlchemyAutoSchema  # type: ignore
+from marshmallow_sqlalchemy import SQLAlchemyAutoSchema
 from werkzeug.security import generate_password_hash, check_password_hash
 
-from .db import db
+from .constants import API_TOKEN_LENGTH
+from .db import Base, session
 
 
 def load_user(user_id: int) -> Optional["User"]:
@@ -27,8 +31,11 @@ def load_user(user_id: int) -> Optional["User"]:
 
     return None
 
+
 #  replace any with column type
-def wrap_func(col: Union[str, Any], func_: Callable) -> Callable:
+def wrap_func(
+    col: Union[str, Any], func_: Callable[[Any], Any]
+) -> Callable[[Any], Any]:
     """Wrap a function with current context of col.
 
     Args:
@@ -40,34 +47,55 @@ def wrap_func(col: Union[str, Any], func_: Callable) -> Callable:
     if not isinstance(col, str):
         col = col.key
 
-    def wrapped(context) -> Callable:
+    def wrapped(context: DefaultExecutionContext) -> Any:
+        assert context.current_parameters is not None
         return func_(context.current_parameters.get(col))
 
     return wrapped
 
 
-class User(db.Model, UserMixin):
+def create_token() -> str:
+    for _ in range(1, 5):
+        token = token_urlsafe(API_TOKEN_LENGTH)
+        user = User.load_by_token(token)
+        if not user:
+            return token[:API_TOKEN_LENGTH]
+    raise Exception()
+
+
+class User(Base, UserMixin):
     """Core user model."""
 
     __tablename__ = "users"
 
-    id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(50), nullable=False, unique=True)
-    mail = db.Column(db.String(120), nullable=False, unique=True)
-    password = db.Column(db.String(255), nullable=False)
-    created_at = db.Column(db.DateTime, nullable=False, default=func.now())
-    updated_at = db.Column(
-        db.DateTime, nullable=False, default=func.now(), onupdate=func.now()
+    id = Column(Integer, primary_key=True)
+    name = Column(String(50), nullable=False, unique=True)
+    mail = Column(String(120), nullable=False, unique=True)
+    password = Column(String(255), nullable=False)
+    created_at = Column(DateTime, nullable=False, default=func.now())
+    updated_at = Column(
+        DateTime, nullable=False, default=func.now(), onupdate=func.now()
     )
-    last_login_at = db.Column(db.DateTime, nullable=True)
-    is_admin = db.Column(db.Boolean, nullable=False, default=False)
+    last_login_at = Column(DateTime, nullable=True)
+    is_admin = Column(Boolean, nullable=False, default=False)
+
+    token = Column(
+        String(API_TOKEN_LENGTH),
+        nullable=False,
+        unique=True,
+        index=True,
+        default=create_token,
+    )
 
     def set_password(self, password: str) -> None:
         """Hash and set password."""
+
         self.password = generate_password_hash(password, method="sha256")
 
     def check_password(self, password: str) -> bool:
         """Check hashed password."""
+
+        assert self.password is not None
         return check_password_hash(self.password, password)
 
     @classmethod
@@ -88,28 +116,39 @@ class User(db.Model, UserMixin):
 
         return None
 
+    @classmethod
+    def load_by_token(cls, token: str) -> Optional["User"]:
+        user = cls.query.filter_by(token=token).first()
+        if not user:
+            return None
+        return cast("User", user)
 
-class Setting(db.Model):
+    __mapper_args = {
+        "always_refresh": True,
+    }
+
+
+class Setting(Base):
     """Model for storing settings in DB."""
 
     __tablename__ = "settings"
 
-    variable = db.Column(db.String(255), primary_key=True)
-    value = db.Column(db.PickleType(), nullable=False)
-    updated_at = db.Column(
-        db.TIMESTAMP(), nullable=False, default=func.now(), onupdate=func.now()
+    variable = Column(String(255), primary_key=True)
+    value = Column(PickleType(), nullable=False)
+    updated_at = Column(
+        TIMESTAMP(), nullable=False, default=func.now(), onupdate=func.now()
     )
 
     @classmethod
     def get_value(cls, variable: str) -> Optional[Any]:
-        setting = db.session.query(cls).get(variable)
+        setting = session.query(cls).get(variable)
         if setting:
             return setting.value
         return None
 
     @classmethod
     def set_value(cls, variable: str, value: Any) -> "Setting":
-        setting = db.session.query(cls).get(variable)
+        setting = session.query(cls).get(variable)
         if setting is None:
             setting = Setting(variable=variable, value=value)
         else:

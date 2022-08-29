@@ -1,5 +1,13 @@
-from flask_sqlalchemy import SQLAlchemy
+"""Database configuration and access
+"""
+
+from flask import Config as FlaskConfig
 from sqlalchemy import MetaData
+from sqlalchemy import create_engine
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import sessionmaker, scoped_session
+
+from .config import variable_name
 
 #: Use custom convention for naming keys to prevent dialect specific limitations (e.g.: max key length of 64
 #: characters).
@@ -11,15 +19,18 @@ convention = {
     "fk": "fk_%(table_name)s_%(column_0_name)s_%(referred_table_name)s",
     "pk": "pk_%(table_name)s",
 }
-engine_options = {
-    "max_identifier_length": 64,
-}
-session_options = {
-    "expire_on_commit": False,
-}
 metadata = MetaData(naming_convention=convention)
-db = SQLAlchemy(
-    metadata=metadata,
-    engine_options=engine_options,
-    session_options=session_options,
+
+# extract config from flask
+_I_VIS_CONF = variable_name("CONF")
+_flask_config = FlaskConfig(__file__)
+_flask_config.from_envvar(_I_VIS_CONF)
+engine = create_engine(
+    url=_flask_config["SQLALCHEMY_DATABASE_URI"],
+    max_identifier_length=64,
 )
+
+
+session = scoped_session(sessionmaker(autocommit=False, autoflush=False, bind=engine))
+Base = declarative_base(metadata=metadata)
+Base.query = session.query_property()

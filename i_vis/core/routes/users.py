@@ -8,14 +8,13 @@ from flask import Blueprint, render_template, redirect, url_for, flash
 from flask_login import current_user
 from flask_login.utils import login_required
 
-from ..db import db
+from ..db import session
 from ..errors import flash_duplicate, flash_not_found
 from ..forms import ChangeUserForm, UserForm
 from ..models import User
 from ..login import admin_required
 
 bp = Blueprint("users", __name__, url_prefix="/users")
-
 
 # TODO
 _index_col_descs = {
@@ -55,8 +54,8 @@ def add() -> Union[str, Response]:
             return redirect(url_for("users.add"))
         user = User(name=form.name.data, mail=form.mail.data)
         user.set_password(form.password.data)
-        db.session.add(user)
-        db.session.commit()
+        session.add(user)
+        session.commit()
         flash(f"User {user.name} has been created.", category="success")
         return redirect(url_for("users.show", user_id=user.name))
     return render_template("users/adt.jinja", title="Add User", form=form)
@@ -95,8 +94,8 @@ def edit(user_id: int) -> Union[str, Response]:
             return redirect(url_for("users.edit"))
         user = User(name=form.name.data, mail=form.mail.data)
         user.set_password(form.password.data)
-        db.session.add(user)
-        db.session.commit()
+        session.add(user)
+        session.commit()
         flash(f"User {user.name} has been updated.", category="success")
         return redirect(url_for("users.show", user_id=user.name))
     return render_template("users/edit.jinja", title="Edit User", form=form)

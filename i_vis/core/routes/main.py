@@ -9,7 +9,7 @@ from flask import abort, Blueprint, flash, render_template, redirect, request, u
 from flask_login import current_user, login_user, logout_user
 from flask_login.utils import login_required
 
-from ..db import db
+from ..db import session
 from ..forms import SignInForm, ChangeUserForm
 from ..models import User, Setting
 from ..utils import is_safe_url
@@ -99,8 +99,8 @@ def account() -> str:
     if form.validate_on_submit():
         if form.password.data and current_user.check_password(form.current.data):
             current_user.set_password(form.password.data)
-            db.session.add(current_user)
-            db.session.commit()
+            session.add(current_user)
+            session.commit()
             flash("Password changed.", category="success")
             return render_template("account.jinja", form=form)
 
@@ -115,7 +115,7 @@ def account() -> str:
 def show_settings() -> str:
     settings = {
         setting.variable: str(setting.value)
-        for setting in Setting.query.order_by(Setting.variable).all()
+        for setting in session.query(Setting).order_by(Setting.variable).all()
     }
     return render_template(
         "settings.jinja", settings=settings, current_user=current_user

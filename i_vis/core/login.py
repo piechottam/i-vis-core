@@ -19,7 +19,7 @@ if TYPE_CHECKING:
 login = LoginManager()
 
 
-def admin_required(func: Callable) -> Callable:
+def admin_required(func: Callable[[Any], Any]) -> Callable[[Any], Any]:
     """Make view only accessible to admins.
 
     Args:

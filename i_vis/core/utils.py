@@ -23,7 +23,7 @@ from requests.exceptions import RequestException
 
 if TYPE_CHECKING:
     from logging import LogRecord
-    from .db import db
+    from .db import Base
 
 
 class StatusCode200Error(RequestException):
@@ -104,7 +104,7 @@ def datatable_render_link(url: str, label: str = "'+data+'") -> str:
     )
 
 
-def render_link(url, label):
+def render_link(url: str, label: str) -> str:
     """TODO-report what is this used for?
 
     Args:
@@ -139,10 +139,12 @@ _DATATABLE = {}
 
 # TODO-report
 def register_datatable_query(
-        query_name: str, model, schema, query_desc, callback: Optional[Callable] = None
+    query_name: str,
+    model: "Base",
+    schema,
+    query_desc,
+    callback: Optional[Callable] = None,
 ) -> None:
-    if not callback:
-        callback = _true
     _DATATABLE[query_name] = {
         "model": model,
         "schema": schema,
@@ -156,13 +158,11 @@ _AUTOCOMPLETE: MutableMapping = {}
 
 
 # TODO-report
-def _true() -> bool:
-    return True
-
-
-# TODO-report
 def register_autocomplete(
-        model_name: str, model: "db.Base", column: str, callback: Optional[Callable] = None
+    model_name: str,
+    model: "Base",
+    column: str,
+    callback: Optional[Callable[[Any], bool]] = None,
 ) -> None:
     model_meta = _AUTOCOMPLETE.setdefault(model_name.title(), {})
     if not model_meta:
@@ -170,7 +170,7 @@ def register_autocomplete(
         model_meta["cols"] = {}
 
     if callback is None:
-        callback = _true
+        callback = lambda x: True
     model_meta["cols"][column] = callback
 
 
@@ -193,6 +193,6 @@ CLASS_NAME_REGEX = re.compile("([ _-]*)([^ _-]+)")
 
 def class_name(*names: str) -> str:
     def helper(match: re.Match) -> str:
-        return match.group(2)[0].upper() + match.group(2)[1:]
+        return str(match.group(2)[0].upper() + match.group(2)[1:])
 
     return "".join(CLASS_NAME_REGEX.sub(helper, name) for name in names)

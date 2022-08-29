@@ -1,9 +1,10 @@
-""" Manages config and meta info.
+"""Manages config and meta info.
 """
 
 from typing import Any, Mapping, MutableMapping, Optional, Sequence
+from flask import Flask, current_app, Config
 
-from flask import current_app
+_flask_config = Config(root_path="")
 
 
 class Default:
@@ -11,7 +12,7 @@ class Default:
     TESTING = False
 
 
-class Testing:
+class Testing(Default):
     DEBUG = True
     TESTING = True
 
@@ -42,12 +43,12 @@ class ConfigMeta:
 
     # pylint: disable=too-many-arguments
     def register_variable(
-        self,
-        name: str,
-        vtype: str,
-        required: bool = False,
-        pname: Optional[str] = None,
-        default: Optional[Any] = None,
+            self,
+            name: str,
+            vtype: str,
+            required: bool = False,
+            pname: Optional[str] = None,
+            default: Optional[Any] = None,
     ) -> str:
         """Register meta info for a variable.
 
@@ -80,7 +81,7 @@ class ConfigMeta:
         return var
 
     def register_core_variable(
-        self, name: str, required: bool = False, default: Optional[Any] = None
+            self, name: str, required: bool = False, default: Optional[Any] = None
     ) -> str:
         """Register meta info for a general purpose variable.
 
@@ -91,11 +92,11 @@ class ConfigMeta:
         )
 
     def register_plugin_variable(
-        self,
-        pname: str,
-        name: str,
-        required: bool = False,
-        default: Optional[Any] = None,
+            self,
+            pname: str,
+            name: str,
+            required: bool = False,
+            default: Optional[Any] = None,
     ) -> str:
         """Register meta info for a plugin specific variable.
 
@@ -189,7 +190,7 @@ class ConfigMeta:
 
 def _check_meta(var_name: str, meta: Mapping[str, Any]) -> None:
     if meta["required"] and (
-        var_name not in current_app.config or current_app.config[var_name] is None
+            var_name not in current_app.config or current_app.config[var_name] is None
     ):
         raise MissingVariable(var_name)
 
@@ -204,15 +205,29 @@ def variable_name(name: str, pname: Optional[str] = None) -> str:
     Returns:
         Formatted variable name.
     """
+
     if pname and not pname.startswith("i-vis-"):
         return f"I_VIS_{pname}_{name}".upper()
+
     return f"I_VIS_{name}".upper()
 
+
 def add_i_vis(name: str, value: Any) -> None:
-    current_app.config[variable_name(name)] = value
+    _flask_config[variable_name(name)] = value
+
 
 def get_ivis(name: str, default: Optional[Any] = None) -> Any:
-    return current_app.config.get(variable_name(name), default)
+    return get_config().get(variable_name(name), default)
+
 
 def require_ivis(name: str) -> Any:
-    return current_app.config[variable_name(name)]
+    return get_config()[variable_name(name)]
+
+
+def init_app(app: Flask) -> None:
+    if app.config:
+        _flask_config.update(app.config)
+
+
+def get_config() -> Mapping[str, Any]:
+    return dict(_flask_config)
